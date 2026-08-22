@@ -6,8 +6,18 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 IMAGE="localhost/regreet-builder:latest"
 OUTPUT_DIR="$SCRIPT_DIR/output"
 
+DO_BUILD=1
+DO_INSTALL=1
+case "${1:-}" in
+    --build-only)   DO_INSTALL=0 ;;
+    --install-only) DO_BUILD=0 ;;
+    "")             ;;
+    *) echo "usage: $0 [--build-only|--install-only]" >&2; exit 2 ;;
+esac
+
 mkdir -p "$OUTPUT_DIR"
 
+if (( DO_BUILD )); then
 echo "==> Building regreet image (first run ~10-15 minutes for cargo deps)..."
 # Rootful: rootless podman on Fedora 43 fails to chown cups-filesystem (a hard dep
 # of gtk4) during rpm unpack. Build + extract under sudo so the throwaway builder
@@ -24,6 +34,7 @@ sudo podman run --rm \
     -v "$OUTPUT_DIR:/out:z" \
     "$IMAGE" \
     bash -c 'cp /output/*.rpm /out/'
+fi
 
 RPM=$(ls -t "$OUTPUT_DIR"/regreet*.rpm 2>/dev/null | head -1)
 if [[ -z "$RPM" ]]; then
@@ -31,6 +42,11 @@ if [[ -z "$RPM" ]]; then
     exit 1
 fi
 echo "==> Built: $RPM"
+
+if (( ! DO_INSTALL )); then
+    echo "==> --build-only: stopping before install."
+    exit 0
+fi
 
 echo "==> Installing greetd and cage from Fedora repos..."
 sudo dnf install -y greetd greetd-selinux cage
